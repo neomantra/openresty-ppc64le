@@ -1,0 +1,87 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs-on:
+        description: Runner label (use a native ppc64le runner when available)
+        default: ubuntu-latest
+      luajit_ref:
+        description: Override LUAJIT_REF (empty = Dockerfile default)
+        default: ""
+  push:
+    branches: [main]
+    tags: ['v*']
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
+    timeout-minutes: 360
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Classify run
+        id: kind
+        run: |
+          if [ "$(uname -m)" = "ppc64le" ]; then echo "kind=native" >> "$GITHUB_OUTPUT"
+          else echo "kind=emulated" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: docker/setup-qemu-action@v3
+        if: steps.kind.outputs.kind == 'emulated'
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        env:
+          LUAJIT_REF_INPUT: ${{ inputs.luajit_ref }}
+        run: |
+          ARGS=()
+          if [ -n "$LUAJIT_REF_INPUT" ]; then ARGS+=(--build-arg "LUAJIT_REF=$LUAJIT_REF_INPUT"); fi
+          docker buildx build --platform linux/ppc64le --load "${ARGS[@]}" \
+            --target runtime -t "${IMAGE,,}:ci" .
+
+      - name: Smoke tests
+        run: docker run --rm --platform linux/ppc64le "${IMAGE,,}:ci" smoke.sh
+
+      - name: Export tarball
+        env:
+          LUAJIT_REF_INPUT: ${{ inputs.luajit_ref }}
+        run: |
+          ARGS=()
+          if [ -n "$LUAJIT_REF_INPUT" ]; then ARGS+=(--build-arg "LUAJIT_REF=$LUAJIT_REF_INPUT"); fi
+          docker buildx build --platform linux/ppc64le --target export "${ARGS[@]}" \
+            --output type=tar,dest=openresty-ppc64le.tar .
+          gzip -f openresty-ppc64le.tar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openresty-ppc64le-${{ steps.kind.outputs.kind }}
+          path: openresty-ppc64le.tar.gz
+
+      - name: Log in to GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          docker tag "${IMAGE,,}:ci" "${IMAGE,,}:${GITHUB_REF_NAME}"
+          docker push "${IMAGE,,}:${GITHUB_REF_NAME}"
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: openresty-ppc64le.tar.gz
+          body: |
+            UNOFFICIAL ppc64le build (caveat emptor). Built **${{ steps.kind.outputs.kind }}**.
+            ${{ steps.kind.outputs.kind == 'emulated' && 'Emulated under QEMU: not validated on native POWER hardware.' || 'Built and smoke-tested on native ppc64le.' }}
