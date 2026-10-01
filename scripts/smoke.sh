@@ -43,9 +43,17 @@ check "ngx.re.match no match is nil" "nil" \
 
 # 4. nginx config is valid and serves a request.
 check "nginx -t" "ok" bash -c 'openresty -t >/dev/null 2>&1 && echo ok'
-openresty -g 'daemon on;'
-sleep 1
-check "http request" "hello from openresty" curl -fsS http://127.0.0.1:8080/
-openresty -s stop >/dev/null 2>&1
+if openresty -g 'daemon on;'; then
+  # Poll for readiness: emulated or loaded hosts can take a while to bind.
+  for _ in $(seq 30); do
+    curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:8080/ 2>/dev/null && break
+    sleep 1
+  done
+  check "http request" "hello from openresty" curl -fsS --max-time 10 http://127.0.0.1:8080/
+  openresty -s stop >/dev/null 2>&1
+else
+  echo "FAIL  nginx start"
+  fail=1
+fi
 
 exit "$fail"

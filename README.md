@@ -31,4 +31,10 @@ Build args: `OPENRESTY_VERSION`, `LUAJIT_REPO`, `LUAJIT_REF`. Once the fix is up
 
 ## Reporting results
 
-On real POWER hardware, please run `smoke.sh` and comment on issue #1152 with `uname -m`, your distro, `gcc --version`, and the smoke output. Paste the full output if anything fails.
+On real POWER hardware, run `docker run --rm ghcr.io/neomantra/openresty-ppc64le:<tag> smoke.sh` and comment on issue #1152 with `uname -m`, your distro, `gcc --version`, and the smoke output. Paste the full output if anything fails.
+
+## Maintainers
+
+- New GHCR packages start private. After the first tag push, make `openresty-ppc64le` public (Package settings -> Change visibility) or the pull command above will be denied for everyone else.
+- The OpenResty source tarball is pinned by SHA-256 (`OPENRESTY_SHA256` in the Dockerfile, trust on first use). Update it together with `OPENRESTY_VERSION`.
+- Release workflow runs refuse a `luajit_ref` override, so every release is built from the Dockerfile's default ref.

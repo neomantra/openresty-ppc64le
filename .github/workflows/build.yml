@@ -26,11 +26,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Refuse release builds with an overridden LuaJIT ref
+        if: startsWith(github.ref, 'refs/tags/v') && inputs.luajit_ref != ''
+        run: |
+          echo "Releases must use the Dockerfile's default LUAJIT_REF; luajit_ref overrides are for non-release runs." >&2
+          exit 1
+
       - name: Classify run
         id: kind
+        env:
+          LUAJIT_REF_INPUT: ${{ inputs.luajit_ref }}
         run: |
           if [ "$(uname -m)" = "ppc64le" ]; then echo "kind=native" >> "$GITHUB_OUTPUT"
           else echo "kind=emulated" >> "$GITHUB_OUTPUT"; fi
+          ljref="${LUAJIT_REF_INPUT:-$(sed -n 's/^ARG LUAJIT_REF=//p' Dockerfile)}"
+          ljrepo="$(sed -n 's/^ARG LUAJIT_REPO=//p' Dockerfile)"
+          ocver="$(sed -n 's/^ARG OPENRESTY_VERSION=//p' Dockerfile | head -n1)"
+          {
+            echo "luajit_ref=$ljref"
+            echo "luajit_repo=$ljrepo"
+            echo "openresty_version=$ocver"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
         if: steps.kind.outputs.kind == 'emulated'
@@ -84,4 +100,8 @@ jobs:
           files: openresty-ppc64le.tar.gz
           body: |
             UNOFFICIAL ppc64le build (caveat emptor). Built **${{ steps.kind.outputs.kind }}**.
+
+            - OpenResty ${{ steps.kind.outputs.openresty_version }}, bundled LuaJIT replaced by `${{ steps.kind.outputs.luajit_repo }}` @ `${{ steps.kind.outputs.luajit_ref }}`
+            - The LuaJIT fix is an unreviewed draft: https://github.com/openresty/luajit2/pull/279
+
             ${{ steps.kind.outputs.kind == 'emulated' && 'Emulated under QEMU: not validated on native POWER hardware.' || 'Built and smoke-tested on native ppc64le.' }}

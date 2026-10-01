@@ -1,5 +1,17 @@
 ARG OPENRESTY_VERSION=1.31.1.1
 
+FROM registry.access.redhat.com/ubi9 AS src
+ARG OPENRESTY_VERSION
+# sha256 of openresty-1.31.1.1.tar.gz, recorded on first download (trust on
+# first use; the .asc signature was not checked). Override together with
+# OPENRESTY_VERSION.
+ARG OPENRESTY_SHA256=65b78baadd3f0984055de89bf13f4a1932e5bfe9c31932037a134ea2b1a0ce42
+WORKDIR /src
+RUN set -e; \
+    curl -fsSL -o /tmp/openresty.tar.gz "https://openresty.org/download/openresty-${OPENRESTY_VERSION}.tar.gz"; \
+    echo "${OPENRESTY_SHA256}  /tmp/openresty.tar.gz" | sha256sum -c -; \
+    tar xz --strip-components=1 -f /tmp/openresty.tar.gz
+
 FROM registry.access.redhat.com/ubi9 AS build
 ARG OPENRESTY_VERSION
 ARG LUAJIT_REPO=https://github.com/neomantra/openresty-luajit2.git
@@ -13,9 +25,8 @@ RUN dnf install -y gcc gcc-c++ make perl git tar gzip patch which \
     && dnf clean all
 RUN command -v git >/dev/null || { echo "git is required during make" >&2; exit 1; }
 
+COPY --from=src /src /src
 WORKDIR /src
-RUN curl -fsSL "https://openresty.org/download/openresty-${OPENRESTY_VERSION}.tar.gz" \
-    | tar xz --strip-components=1
 
 # Replace the bundled LuaJIT (directory name must match bundle/LuaJIT-[0-9]*).
 RUN LJDIR="$(ls -d bundle/LuaJIT-[0-9]* | head -n1)" \
@@ -38,6 +49,10 @@ FROM scratch AS export
 COPY --from=build /usr/local/openresty /usr/local/openresty
 
 FROM registry.access.redhat.com/ubi9-minimal AS runtime
+ARG OPENRESTY_VERSION
+LABEL org.opencontainers.image.source="https://github.com/neomantra/openresty-ppc64le" \
+      org.opencontainers.image.description="Unofficial ppc64le OpenResty build (caveat emptor)" \
+      org.opencontainers.image.version="${OPENRESTY_VERSION}"
 # resty (the OpenResty CLI) is a Perl script.
 RUN microdnf install -y pcre2 openssl-libs zlib curl-minimal perl-interpreter \
     && microdnf clean all
