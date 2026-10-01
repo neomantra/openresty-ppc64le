@@ -12,6 +12,7 @@ OpenResty 1.31.1.1 on ppc64le returns `0LL` from `ffi.cast("int64_t", n)`, which
 ## What you get
 
 - Image: `ghcr.io/neomantra/openresty-ppc64le:<tag>`
+- Testing image: `ghcr.io/neomantra/openresty-ppc64le:testing` is the latest `main` build (also `:sha-<short>`). It is unreleased, and emulated unless the run was native.
 - Tarball: the `/usr/local/openresty` install tree, attached to each release
 - LuaJIT runs interpreter-only (no JIT, FFI kept); PCRE JIT is on
 - Base: UBI 9
