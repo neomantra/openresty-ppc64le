@@ -5,7 +5,7 @@ on:
     inputs:
       runs-on:
         description: Runner label (use a native ppc64le runner when available)
-        default: ubuntu-latest
+        default: ubuntu-26.04
       luajit_ref:
         description: Override LUAJIT_REF (empty = Dockerfile default)
         default: ""
@@ -27,13 +27,13 @@ env:
 
 jobs:
   build:
-    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runs-on || 'ubuntu-26.04' }}
     timeout-minutes: 360
     permissions:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Refuse release builds with an overridden LuaJIT ref
         if: startsWith(github.ref, 'refs/tags/v') && inputs.luajit_ref != ''
@@ -57,11 +57,11 @@ jobs:
             echo "openresty_version=$ocver"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v4
         if: steps.kind.outputs.kind == 'emulated'
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       # Exposes the cache credentials to the plain `docker buildx` CLI below.
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@v4
 
       - name: Build image
         env:
@@ -88,14 +88,14 @@ jobs:
             --output type=tar,dest=openresty-ppc64le.tar .
           gzip -f openresty-ppc64le.tar
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: openresty-ppc64le-${{ steps.kind.outputs.kind }}
           path: openresty-ppc64le.tar.gz
 
       - name: Log in to GHCR
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -118,7 +118,7 @@ jobs:
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: openresty-ppc64le.tar.gz
           body: |
