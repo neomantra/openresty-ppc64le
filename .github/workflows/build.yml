@@ -121,6 +121,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: openresty-ppc64le.tar.gz
+          # Unofficial build of an unreviewed LuaJIT fix; never present as stable.
+          prerelease: true
           body: |
             UNOFFICIAL ppc64le build (caveat emptor). Built **${{ steps.kind.outputs.kind }}**.
 
