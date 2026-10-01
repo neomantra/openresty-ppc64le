@@ -12,6 +12,15 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # Path filters apply to branch pushes only; tag pushes always build.
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'LICENSE*'
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
@@ -51,6 +60,8 @@ jobs:
       - uses: docker/setup-qemu-action@v3
         if: steps.kind.outputs.kind == 'emulated'
       - uses: docker/setup-buildx-action@v3
+      # Exposes the cache credentials to the plain `docker buildx` CLI below.
+      - uses: crazy-max/ghaction-github-runtime@v3
 
       - name: Build image
         env:
@@ -59,6 +70,8 @@ jobs:
           ARGS=()
           if [ -n "$LUAJIT_REF_INPUT" ]; then ARGS+=(--build-arg "LUAJIT_REF=$LUAJIT_REF_INPUT"); fi
           docker buildx build --platform linux/ppc64le --load "${ARGS[@]}" \
+            --cache-from type=gha,scope=ppc64le \
+            --cache-to type=gha,scope=ppc64le,mode=max \
             --target runtime -t "${IMAGE,,}:ci" .
 
       - name: Smoke tests
@@ -71,6 +84,7 @@ jobs:
           ARGS=()
           if [ -n "$LUAJIT_REF_INPUT" ]; then ARGS+=(--build-arg "LUAJIT_REF=$LUAJIT_REF_INPUT"); fi
           docker buildx build --platform linux/ppc64le --target export "${ARGS[@]}" \
+            --cache-from type=gha,scope=ppc64le \
             --output type=tar,dest=openresty-ppc64le.tar .
           gzip -f openresty-ppc64le.tar
 
