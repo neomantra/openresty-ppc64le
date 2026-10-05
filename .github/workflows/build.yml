@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       runs-on:
-        description: Runner label (use a native ppc64le runner when available)
-        default: ubuntu-26.04
+        description: Runner label for the ppc64le job (ubuntu-26.04 = emulated under QEMU)
+        default: ubuntu-24.04-ppc64le
       luajit_ref:
         description: Override LUAJIT_REF (empty = Dockerfile default)
         default: ""
@@ -27,8 +27,21 @@ env:
 
 jobs:
   build:
-    runs-on: ${{ inputs.runs-on || 'ubuntu-26.04' }}
-    timeout-minutes: 360
+    name: build (${{ matrix.arch }})
+    # Native runners come from IBM actionspz (power-z-gha-runner app).
+    # s390x is a build + smoke validation only; it never publishes anything.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: ppc64le
+            runner: ${{ inputs.runs-on || 'ubuntu-24.04-ppc64le' }}
+            publish: true
+          - arch: s390x
+            runner: ubuntu-24.04-s390x
+            publish: false
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     permissions:
       contents: write
       packages: write
@@ -45,8 +58,9 @@ jobs:
         id: kind
         env:
           LUAJIT_REF_INPUT: ${{ inputs.luajit_ref }}
+          ARCH: ${{ matrix.arch }}
         run: |
-          if [ "$(uname -m)" = "ppc64le" ]; then echo "kind=native" >> "$GITHUB_OUTPUT"
+          if [ "$(uname -m)" = "$ARCH" ]; then echo "kind=native" >> "$GITHUB_OUTPUT"
           else echo "kind=emulated" >> "$GITHUB_OUTPUT"; fi
           ljref="${LUAJIT_REF_INPUT:-$(sed -n 's/^ARG LUAJIT_REF=//p' Dockerfile)}"
           ljrepo="$(sed -n 's/^ARG LUAJIT_REPO=//p' Dockerfile)"
@@ -66,18 +80,22 @@ jobs:
       - name: Build image
         env:
           LUAJIT_REF_INPUT: ${{ inputs.luajit_ref }}
+          ARCH: ${{ matrix.arch }}
         run: |
           ARGS=()
           if [ -n "$LUAJIT_REF_INPUT" ]; then ARGS+=(--build-arg "LUAJIT_REF=$LUAJIT_REF_INPUT"); fi
-          docker buildx build --platform linux/ppc64le --load "${ARGS[@]}" \
-            --cache-from type=gha,scope=ppc64le \
-            --cache-to type=gha,scope=ppc64le,mode=max \
+          docker buildx build --platform "linux/$ARCH" --load "${ARGS[@]}" \
+            --cache-from "type=gha,scope=$ARCH" \
+            --cache-to "type=gha,scope=$ARCH,mode=max" \
             --target runtime -t "${IMAGE,,}:ci" .
 
       - name: Smoke tests
-        run: docker run --rm --platform linux/ppc64le "${IMAGE,,}:ci" smoke.sh
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: docker run --rm --platform "linux/$ARCH" "${IMAGE,,}:ci" smoke.sh
 
       - name: Export tarball
+        if: matrix.publish
         env:
           LUAJIT_REF_INPUT: ${{ inputs.luajit_ref }}
         run: |
@@ -89,12 +107,13 @@ jobs:
           gzip -f openresty-ppc64le.tar
 
       - uses: actions/upload-artifact@v7
+        if: matrix.publish
         with:
           name: openresty-ppc64le-${{ steps.kind.outputs.kind }}
           path: openresty-ppc64le.tar.gz
 
       - name: Log in to GHCR
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        if: matrix.publish && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -104,7 +123,7 @@ jobs:
       # Tags publish :<tag>. Pushes to main publish :testing and :sha-<short>.
       # workflow_dispatch runs never push, so a scratch build can't clobber :testing.
       - name: Push image
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        if: matrix.publish && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
         run: |
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             TAGS=("$GITHUB_REF_NAME")
@@ -117,7 +136,7 @@ jobs:
           done
 
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: matrix.publish && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
           files: openresty-ppc64le.tar.gz

@@ -19,7 +19,9 @@ OpenResty 1.31.1.1 on ppc64le returns `0LL` from `ffi.cast("int64_t", n)`, which
 
 ## Validation status
 
-Releases say whether they were built **emulated** (QEMU) or **native**. Only native runs count as validated. Native POWER runners are not yet available (IBM actionspz).
+Releases say whether they were built **emulated** (QEMU) or **native**. Only native runs count as validated. CI builds and smoke-tests on native POWER9 runners (IBM [actionspz](https://github.com/IBM/actionspz), `ubuntu-24.04-ppc64le`).
+
+CI also builds and smoke-tests natively on s390x (`ubuntu-24.04-s390x`) as a validation check only: the patched LuaJIT is a ppc64le fix, and no s390x image or tarball is published.
 
 ## Build and test locally
 
@@ -42,14 +44,6 @@ On real POWER hardware, run `docker run --rm ghcr.io/neomantra/openresty-ppc64le
 
 ## Copyright & License
 
-`openresty-ppc64le` is licensed under the 2-clause BSD license.
+`openresty-ppc64le` is licensed under the 2-clause BSD license, like OpenResty. See [LICENSE](LICENSE).
 
 Copyright (c) 2026, Evan Wies evan@neomantra.net.
-
-This module is licensed under the terms of the BSD license.
-
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-
-Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
